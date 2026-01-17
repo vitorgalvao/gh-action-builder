@@ -1,0 +1,113 @@
+#!/bin/zsh --no-rcs
+
+readonly program="$(basename "${0}")"
+
+# Helpers
+function cond {
+  local -r question="${1}"
+
+  read -k1 "?${question}? [Y/n] "
+  [[ "${REPLY}" != $'\n' ]] && printf '\n' # Print newline if response was not a return
+  [[ "${REPLY}" == 'n' ]] && return 1 || return 0
+}
+
+function ask {
+  local -r question="${1}"
+  local -r suggestion="${2}"
+
+  read "?${question} [${suggestion}]: "
+  printf "${REPLY:-${suggestion}}"
+}
+
+function add {
+  local -r indent="${1}"
+  local -r key="${2}"
+  local -r value="${3}"
+
+  # Write indent
+  local -r spaces="$(printf '%*s' "$((indent * 2))")"
+  printf '%s' "${spaces}"
+  printf '%s' "${spaces}" >> "${output}"
+
+  # Write key, if any
+  if [[ -n "${key}" ]]
+  then
+    printf "$(tput setaf 4)%s:$(tput sgr0)" "${key}"
+    printf '%s' "${key}:" >> "${output}"
+  fi
+
+  # Write value, if any
+  if [[ -n "${value}" ]]
+  then
+    printf " $(tput setaf 3)%s$(tput sgr0)" "${value}"
+    printf ' %s' "${value}" >> "${output}"
+  fi
+
+  # Write newline
+  printf '\n'
+  printf '\n' >> "${output}"
+}
+
+function spacer {
+  printf '\n' >> "${output}"
+}
+
+# Usage and checks
+function usage {
+  echo "
+    Build a sane initial GitHub Actions YAML by answering questions.
+
+    Usage:
+      ${program} <output-file>
+
+    Options:
+      -h, --help   Show this help.
+  " | sed -E 's/^ {4}//'
+
+  exit "${1}"
+}
+
+[[ -n "${1}" ]] || usage 1
+[[ "${1}" =~ ^(-h|--help)$ ]] && usage 0
+
+# Main
+readonly output="${1%.yml}.yml"
+
+add 0 'name' "$(ask 'Name for the action' 'Main')"
+add 0 'permissions' '{}'
+
+spacer
+
+add 0 'on' ''
+add 1 'workflow_dispatch' ''
+
+if cond 'Add cron scheduling'
+then
+  add 1 'schedule' ''
+  readonly crontime="$(ask 'Time to run' "$((RANDOM % 60)) $((RANDOM % 24)) * * *")"
+  add 2 '- cron' "'${crontime}'"
+fi
+
+spacer
+
+add 0 'jobs' ''
+add 1 "$(ask 'Name for the job' 'main')" ''
+add 2 'runs-on' "$(ask 'Runner' 'ubuntu-latest')"
+add 2 'permissions' ''
+
+cond 'Will you need to modify the repo contents' && add 3 'contents' 'write' || add 3 'contents' 'read'
+
+add 2 'steps' ''
+add 3 '- name' 'Prepare repository'
+
+add 4 'env' ''
+add 5 'GITHUB_TOKEN' '${{ secrets.GITHUB_TOKEN }}'
+add 5 'REPOSITORY' '${{ github.repository }}'
+
+add 4 'run' '|'
+add 5 '' 'git config --global user.name "github-actions"'
+add 5 '' 'git config --global user.email "github-actions@users.noreply.github.com"'
+add 5 '' 'git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPOSITORY}" .'
+
+printf '\n'
+cat "${output}"
