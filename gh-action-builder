@@ -108,7 +108,14 @@ add 1 "$(ask 'Name for the job' 'main')" ''
 add 2 'runs-on' "$(ask 'Runner' 'ubuntu-latest')"
 add 2 'permissions' ''
 
-cond 'Will you need to modify repo contents' && add 3 'contents' 'write' || add 3 'contents' 'read'
+if cond 'Will you need to modify repo contents'
+then
+  readonly setup_user='true'
+  add 3 'contents' 'write'
+else
+  readonly setup_user='false'
+  add 3 'contents' 'read'
+fi
 
 if cond 'Will you need to access issues'
 then
@@ -123,8 +130,13 @@ add 5 'GITHUB_TOKEN' '${{ secrets.GITHUB_TOKEN }}'
 add 5 'REPOSITORY' '${{ github.repository }}'
 
 add 4 'run' '|'
-add 5 '' 'git config --global user.name "github-actions"'
-add 5 '' 'git config --global user.email "github-actions@users.noreply.github.com"'
+
+if [[ "${setup_user}" == 'true' ]]
+then
+  add 5 '' 'git config --global user.name "github-actions"'
+  add 5 '' 'git config --global user.email "github-actions@users.noreply.github.com"'
+fi
+
 add 5 '' 'git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPOSITORY}" .'
 
 printf '\n'
