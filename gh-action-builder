@@ -39,8 +39,15 @@ function add {
   # Write value, if any
   if [[ -n "${value}" ]]
   then
-    printf " $(tput setaf 3)%s$(tput sgr0)" "${value}"
-    printf ' %s' "${value}" >> "${output}"
+    # Prepend a space if there was a key in the same line
+    if [[ -n "${key}" ]]
+    then
+      printf ' '
+      printf ' ' >> "${output}"
+    fi
+
+    printf "$(tput setaf 3)%s$(tput sgr0)" "${value}"
+    printf '%s' "${value}" >> "${output}"
   fi
 
   # Write newline
@@ -72,6 +79,12 @@ function usage {
 
 # Main
 readonly output="${1%.yml}.yml"
+
+if [[ -f "${output}" ]]
+then
+  printf 'File "%s" exists.' "${output}" >&2
+  exit 1
+fi
 
 add 0 'name' "$(ask 'Name for the action' 'Main')"
 add 0 'permissions' '{}'
